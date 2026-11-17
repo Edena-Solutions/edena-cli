@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "description": "Edena's command line: every operation of the Edena API as a command, for people and for coding agents.",
   "license": "UNLICENSED",
+  "homepage": "https://github.com/Edena-Solutions/edena-cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Edena-Solutions/edena-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Edena-Solutions/edena-cli/issues"
+  },
   "type": "module",
   "bin": {
     "edena": "dist/src/cli.js"
@@ -14,6 +22,9 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
