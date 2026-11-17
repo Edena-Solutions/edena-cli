@@ -1,0 +1,34 @@
+{
+  "name": "@edena/cli",
+  "version": "0.1.0",
+  "description": "Edena's command line: every operation of the Edena API as a command, for people and for coding agents.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "edena": "dist/src/cli.js"
+  },
+  "files": [
+    "dist/src",
+    "skill",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && node --test dist/test/*.test.js",
+    "prepublishOnly": "npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  },
+  "keywords": [
+    "edena",
+    "cli",
+    "api",
+    "schools",
+    "agent-skills"
+  ]
+}

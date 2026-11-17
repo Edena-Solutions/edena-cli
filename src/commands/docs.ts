@@ -1,0 +1,90 @@
+import { type ParsedArgs, flag, hasFlag } from "../args.js";
+import { resolveSession } from "../config.js";
+import { EXIT, UsageError } from "../errors.js";
+import { bold, dim, printJson, wantsJson } from "../output.js";
+import { type Reference, loadReference } from "../reference.js";
+import { TypeCollector, categoryPrompt, operationMarkdown } from "../schema.js";
+
+/** `edena docs search "unpaid invoices"`: the commands that match, best first. */
+export function docsSearch(reference: Reference, args: ParsedArgs): number {
+    const query = args.positionals.slice(2).join(" ");
+    if (!query) throw new UsageError("What should it look for?", 'Usage: edena docs search "<words>"');
+    const results = reference.search(query, Number(flag(args, "limit") ?? 20));
+    if (wantsJson(hasFlag(args, "json"))) {
+        printJson(results.map((operation) => ({ command: `edena ${operation.command}`, method: operation.method, path: operation.path, summary: operation.summary, category: operation.category, operationId: operation.id })));
+        return EXIT.ok;
+    }
+    if (results.length === 0) {
+        process.stdout.write(`Nothing matches “${query}”. Try other words, or edena categories.\n`);
+        return EXIT.notFound;
+    }
+    const width = Math.max(...results.map((operation) => operation.command.length));
+    for (const operation of results) process.stdout.write(`${bold(operation.command.padEnd(width))}  ${operation.summary}\n${" ".repeat(width + 2)}${dim(`${operation.method} ${operation.path}`)}\n`);
+    return EXIT.ok;
+}
+
+/** `edena docs show students list`: everything about one operation, its types included. */
+export function docsShow(reference: Reference, args: ParsedArgs, apiUrl: string): number {
+    const name = args.positionals.slice(2).join(" ");
+    const operation = reference.find(name);
+    if (!operation) throw new UsageError(`No operation “${name}”.`, `Find it with edena docs search "${name}".`);
+    const types = new TypeCollector(reference.document);
+    const section = operationMarkdown(operation, types);
+    if (reference.document.components?.schemas?.ErrorResponse) types.add("ErrorResponse");
+    const { blocks } = types.render();
+    if (wantsJson(hasFlag(args, "json"))) {
+        printJson({ command: `edena ${operation.command}`, operationId: operation.id, method: operation.method, path: operation.path, url: `${apiUrl}${operation.path}`, summary: operation.summary, category: operation.category, markdown: section.join("\n"), types: blocks.join("\n\n") });
+        return EXIT.ok;
+    }
+    process.stdout.write(`${section.join("\n")}\n\`\`\`ts\n${blocks.join("\n\n")}\n\`\`\`\n`);
+    return EXIT.ok;
+}
+
+/** `edena categories`: every category of the API, as the first word of its commands. */
+export function categories(reference: Reference, args: ParsedArgs): number {
+    const groups = [...reference.groups.values()].sort((a, b) => a.name.localeCompare(b.name));
+    if (wantsJson(hasFlag(args, "json"))) {
+        printJson(groups.map((group) => ({ command: `edena ${group.name}`, category: group.category, description: group.description, operations: group.operations.length })));
+        return EXIT.ok;
+    }
+    const width = Math.max(...groups.map((group) => group.name.length));
+    for (const group of groups) process.stdout.write(`${bold(group.name.padEnd(width))}  ${group.description}\n`);
+    process.stdout.write(dim(`\n${groups.length} categories. Run edena <category> for its actions.\n`));
+    return EXIT.ok;
+}
+
+/** `edena prompt invoices`: a prompt for a coding agent to implement the whole category. */
+export function prompt(reference: Reference, args: ParsedArgs, apiUrl: string): number {
+    const name = args.positionals[1];
+    const group = name ? reference.groups.get(name) : undefined;
+    if (!group) throw new UsageError(name ? `No category “${name}”.` : "Which category?", "Usage: edena prompt <category>. See edena categories.");
+    process.stdout.write(categoryPrompt(reference.document, group, apiUrl));
+    return EXIT.ok;
+}
+
+/** `edena types invoices students`: the TypeScript types those categories use, ready to save in a project. */
+export function types(reference: Reference, args: ParsedArgs): number {
+    const names = args.positionals.slice(1);
+    if (names.length === 0 && !hasFlag(args, "all")) throw new UsageError("Which categories?", "Usage: edena types <category>... or edena types --all");
+    const groups = names.length > 0 ? names.map((name) => reference.groups.get(name) ?? fail(name)) : [...reference.groups.values()];
+    const collector = new TypeCollector(reference.document, true);
+    for (const group of groups) {
+        for (const operation of group.operations) operationMarkdown(operation, collector);
+    }
+    if (reference.document.components?.schemas?.ErrorResponse) collector.add("ErrorResponse");
+    const { blocks } = collector.render();
+    process.stdout.write(`// Edena API types for ${groups.map((group) => group.name).join(", ")}. Generated by edena types.\n\n${blocks.join("\n\n")}\n`);
+    return EXIT.ok;
+}
+
+function fail(name: string): never {
+    throw new UsageError(`No category “${name}”.`, "See edena categories.");
+}
+
+/** `edena docs refresh`: fetches the reference again, now. */
+export async function docsRefresh(args: ParsedArgs): Promise<number> {
+    const session = await resolveSession(flag(args, "profile"));
+    const reference = await loadReference(session.apiUrl, { refresh: true });
+    process.stdout.write(`The reference is up to date: ${reference.operations.length} operations in ${reference.groups.size} categories.\n`);
+    return EXIT.ok;
+}
