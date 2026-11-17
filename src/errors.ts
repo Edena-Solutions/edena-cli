@@ -23,8 +23,7 @@ export class UsageError extends Error {
 /** No key to call the API with: nobody signed in, and no `EDENA_API_KEY`. */
 export class NotSignedInError extends Error {
     readonly exitCode = EXIT.auth;
-    readonly hint = "Run edena login, or set EDENA_API_KEY.";
-    constructor() {
+    constructor(readonly hint = "Run edena login, or set EDENA_API_KEY.") {
         super("Not signed in.");
     }
 }

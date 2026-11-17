@@ -1,7 +1,7 @@
 import { hostname } from "node:os";
 import { type ParsedArgs, flag, hasFlag } from "../args.js";
 import { DEFAULT_API_URL, readConfig, removeProfile, resolveSession, saveProfile, useProfile } from "../config.js";
-import { ApiError, EXIT, UsageError } from "../errors.js";
+import { ApiError, EXIT, NotSignedInError, UsageError } from "../errors.js";
 import { apiRequest } from "../http.js";
 import { bold, dim, printHuman, printJson, wantsJson } from "../output.js";
 import { VERSION } from "../version.js";
@@ -75,7 +75,7 @@ export async function login(args: ParsedArgs): Promise<number> {
 /** Revokes the key this terminal holds and forgets it: signing out for good, not just locally. */
 export async function logout(args: ParsedArgs): Promise<number> {
     const session = await resolveSession(flag(args, "profile"));
-    if (!session.profileName || !session.apiKey) throw new UsageError("Not signed in.", "Run edena login.");
+    if (!session.profileName || !session.apiKey) throw new NotSignedInError("Run edena login.");
     try {
         await apiRequest({ apiUrl: session.apiUrl, apiKey: session.apiKey, method: "POST", path: "/cli/logout" });
     } catch (error) {
@@ -90,7 +90,7 @@ export async function logout(args: ParsedArgs): Promise<number> {
 /** Who the CLI is signed in as, from the API itself. */
 export async function whoami(args: ParsedArgs): Promise<number> {
     const session = await resolveSession(flag(args, "profile"));
-    if (!session.apiKey) throw new UsageError("Not signed in.", "Run edena login, or set EDENA_API_KEY.");
+    if (!session.apiKey) throw new NotSignedInError();
     const response = await apiRequest({ apiUrl: session.apiUrl, apiKey: session.apiKey, method: "GET", path: "/cli/whoami" });
     const data = response.kind === "json" ? response.data : null;
     if (wantsJson(hasFlag(args, "json"))) printJson({ profile: session.profileName, apiUrl: session.apiUrl, ...(data as object) });

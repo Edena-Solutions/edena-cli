@@ -230,6 +230,7 @@ describe("edena, end to end against a fake API", () => {
         assert.equal(result.code, 0, result.stderr);
         assert.equal(seen.at(-1)?.url, "/cli/logout");
         const after = await run(["whoami"]);
-        assert.equal(after.code, 2);
+        assert.equal(after.code, 3, "not signed in is an auth failure, not a usage error");
+        assert.equal((await run(["logout"])).code, 3);
     });
 });
