@@ -3,7 +3,7 @@
 `edena` runs every operation of the [Edena API](https://api.edena.es/openapi.json) as a command, for people and for coding agents (Claude Code, Codex, Gemini CLI).
 
 ```sh
-npm install -g @edena/cli
+npm install -g @edena-solutions/cli
 edena login
 edena students list --status active
 ```

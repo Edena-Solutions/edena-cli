@@ -9,7 +9,7 @@ description: Work with Edena, the management platform for schools, nurseries and
 
 ## 1. Check the session first
 
-1. `edena --version`. If it is missing: `npm install -g @edena/cli` (needs Node.js 20 or later).
+1. `edena --version`. If it is missing: `npm install -g @edena-solutions/cli` (needs Node.js 20 or later).
 2. `edena whoami --json`. It answers the organization, its `environment` (`sandbox` or `live`) and the key's role.
 3. If it says "Not signed in", run `edena login`. It prints a link and a code: tell the user to open the link, check the code and approve it in the Edena console, then wait for the command to finish. Do not try to sign in any other way.
 4. Signed in to more than one organization: `edena profiles --json` lists them, `edena use <profile>` switches.

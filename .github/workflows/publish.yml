@@ -1,11 +1,11 @@
 # Publishes to npm when a GitHub release is published, with npm's trusted publishing: no token is
 # stored anywhere, npm trusts this workflow of this repository, and every version gets provenance.
 #
-# Once, on npmjs.com: package @edena/cli → Settings → Trusted publisher → GitHub Actions, with
+# Once, on npmjs.com: package @edena-solutions/cli → Settings → Trusted publisher → GitHub Actions, with
 # organization "Edena-Solutions", repository "edena-cli" and workflow "publish.yml".
 #
 # A release whose version has a pre-release part (0.2.0-beta.1) goes out under the "next" tag, so
-# `npm install @edena/cli` keeps installing the latest stable one.
+# `npm install @edena-solutions/cli` keeps installing the latest stable one.
 name: Publish to npm
 
 on:
