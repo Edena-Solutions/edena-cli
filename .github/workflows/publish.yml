@@ -1,0 +1,46 @@
+# Publishes to npm when a GitHub release is published, with npm's trusted publishing: no token is
+# stored anywhere, npm trusts this workflow of this repository, and every version gets provenance.
+#
+# Once, on npmjs.com: package @edena/cli → Settings → Trusted publisher → GitHub Actions, with
+# organization "Edena-Solutions", repository "edena-cli" and workflow "publish.yml".
+#
+# A release whose version has a pre-release part (0.2.0-beta.1) goes out under the "next" tag, so
+# `npm install @edena/cli` keeps installing the latest stable one.
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm test
+      - name: Check the release matches package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::The release is $GITHUB_REF_NAME but package.json says $version. Run npm version first."
+            exit 1
+          fi
+      - name: Publish
+        run: |
+          version=$(node -p "require('./package.json').version")
+          case "$version" in
+            *-*) npm publish --tag next ;;
+            *) npm publish ;;
+          esac

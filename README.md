@@ -87,3 +87,16 @@ node dist/src/cli.js --help
 ```
 
 `EDENA_REFERENCE_FILE=path/to/openapi.json` reads the reference from disk; `EDENA_CONFIG_DIR` and `EDENA_CACHE_DIR` move the config and the cache.
+
+## Releasing
+
+1. `npm version patch` (or `minor`, `major`, `prerelease --preid beta`): bumps `package.json` and tags `vX.Y.Z`.
+2. `git push --follow-tags`.
+3. Publish a GitHub release from the tag (`gh release create vX.Y.Z --generate-notes`).
+
+The **Publish to npm** workflow then tests and publishes it with npm's trusted publishing and provenance; a pre-release goes out under the `next` tag. CI runs the tests on every push and pull request.
+
+## License
+
+[MIT](LICENSE)
+
