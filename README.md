@@ -92,11 +92,12 @@ node dist/src/cli.js --help
 
 ## Releasing
 
-1. `npm version patch` (or `minor`, `major`, `prerelease --preid beta`): bumps `package.json` and tags `vX.Y.Z`.
+1. On `main`, `npm version patch` (or `minor`, `major`, `prerelease --preid beta`): bumps `package.json` and tags `vX.Y.Z`.
 2. `git push --follow-tags`.
 3. Publish a GitHub release from the tag (`gh release create vX.Y.Z --generate-notes`).
+4. Another maintainer approves the run in the `npm` environment (Actions → the run → Review deployments).
 
-The **Publish to npm** workflow then tests and publishes it with npm's trusted publishing and provenance; a pre-release goes out under the `next` tag. CI runs the tests on every push and pull request.
+The **Publish to npm** workflow then checks the tag's commit is on `main`, tests and publishes it with npm's trusted publishing and provenance; a pre-release goes out under the `next` tag. npm only accepts a publication from that workflow in that environment. CI runs the tests on every push and pull request.
 
 ## License
 

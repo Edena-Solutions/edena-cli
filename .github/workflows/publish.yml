@@ -2,7 +2,12 @@
 # stored anywhere, npm trusts this workflow of this repository, and every version gets provenance.
 #
 # Once, on npmjs.com: package @edena-solutions/cli → Settings → Trusted publisher → GitHub Actions, with
-# organization "Edena-Solutions", repository "edena-cli" and workflow "publish.yml".
+# organization "Edena-Solutions", repository "edena-cli", workflow "publish.yml" and environment "npm".
+#
+# Publishing takes two people and main: the job runs in the "npm" environment, whose required reviewer
+# (self-review not allowed, tags v* only) approves each release, and npm trusts no other environment; and
+# the release's commit must be on main, since a release can point to a commit of any branch. A write
+# access alone, or one stolen account, cannot publish.
 #
 # A release whose version has a pre-release part (0.2.0-beta.1) goes out under the "next" tag, so
 # `npm install @edena-solutions/cli` keeps installing the latest stable one.
@@ -24,10 +29,20 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Waits for a person to approve it (the environment's reviewers) before anything runs.
+    environment: npm
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
+          # The whole history, to check where the release's commit comes from.
+          fetch-depth: 0
+      - name: Check the release is a commit of main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points to a commit that is not on main. Releases are made from main only."
+            exit 1
+          fi
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "24"
