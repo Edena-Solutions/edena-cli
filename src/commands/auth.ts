@@ -1,6 +1,17 @@
 import { hostname } from "node:os";
 import { type ParsedArgs, flag, hasFlag } from "../args.js";
-import { DEFAULT_API_URL, readConfig, removeProfile, resolveSession, saveProfile, useProfile } from "../config.js";
+import {
+    DEFAULT_API_URL,
+    type PendingLogin,
+    clearPendingLogin,
+    readConfig,
+    readPendingLogin,
+    removeProfile,
+    resolveSession,
+    savePendingLogin,
+    saveProfile,
+    useProfile,
+} from "../config.js";
 import { ApiError, EXIT, NotSignedInError, UsageError } from "../errors.js";
 import { apiRequest } from "../http.js";
 import { bold, dim, printHuman, printJson, wantsJson } from "../output.js";
@@ -30,46 +41,87 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Signs in the way a TV signs in to a streaming service: the terminal asks the API for a sign-in, the
  * person approves it in the console (choosing the sandbox or the real data, and the role), and the
  * terminal receives an API key of its own. Nothing is copied by hand.
+ *
+ * A coding agent splits it in two, because its tools show a command's output only once it ends: with
+ * `--start` the link and the code are printed and the command ends, so the agent can pass them on;
+ * `--wait` then waits for the approval. Plain `edena login` does both, for a person at a terminal.
  */
 export async function login(args: ParsedArgs): Promise<number> {
-    const apiUrl = (flag(args, "apiUrl") ?? process.env.EDENA_API_URL ?? DEFAULT_API_URL).replace(/\/$/, "");
     const json = wantsJson(hasFlag(args, "json"));
-    const call = <T>(path: string, body: unknown) =>
-        apiRequest({ apiUrl, apiKey: null, method: "POST", path, body }).then((response) => (response.kind === "json" ? (response.data as T) : null));
-
-    const started = await call<Started>("/cli/sessions", { client: hostname().slice(0, 60), platform: process.platform, version: VERSION });
-    if (!started) throw new Error("The API did not start the sign-in.");
-
-    process.stderr.write(`\nOpen this page to sign in, and check that it shows the code ${bold(started.userCode)}:\n\n  ${started.verificationUrl}\n\n`);
-    if (!hasFlag(args, "noBrowser") && process.stdout.isTTY) openUrl(started.verificationUrl);
-    process.stderr.write(dim("Waiting for you to approve it in the console…\n"));
-
-    const deadline = Date.now() + started.expiresIn * 1000;
-    while (Date.now() < deadline) {
-        await sleep(started.interval * 1000);
-        let poll: Poll | null;
-        try {
-            poll = await call<Poll>("/cli/sessions/token", { deviceCode: started.deviceCode });
-        } catch (error) {
-            if (error instanceof ApiError && error.key === "cli.session_denied") {
-                process.stderr.write("The sign-in was denied in the console.\n");
-                return EXIT.auth;
-            }
-            throw error;
+    if (hasFlag(args, "wait")) {
+        const pending = await readPendingLogin();
+        if (!pending || pending.expiresAt <= Date.now()) {
+            await clearPendingLogin();
+            throw new UsageError("No sign-in is waiting: run edena login --start first.");
         }
-        if (!poll || poll.status === "pending") continue;
-        const profile = { apiUrl, organization: poll.organization, key: poll.key };
-        await saveProfile(poll.organization.slug, profile, poll.apiKey);
-        if (json) printJson({ signedIn: true, profile: poll.organization.slug, ...profile });
+        return waitForApproval(pending, json);
+    }
+
+    const apiUrl = (flag(args, "apiUrl") ?? process.env.EDENA_API_URL ?? DEFAULT_API_URL).replace(/\/$/, "");
+    const started = await post<Started>(apiUrl, "/cli/sessions", { client: hostname().slice(0, 60), platform: process.platform, version: VERSION });
+    if (!started) throw new Error("The API did not start the sign-in.");
+    const pending: PendingLogin = {
+        apiUrl,
+        deviceCode: started.deviceCode,
+        userCode: started.userCode,
+        verificationUrl: started.verificationUrl,
+        interval: started.interval,
+        expiresAt: Date.now() + started.expiresIn * 1000,
+    };
+
+    if (hasFlag(args, "start")) {
+        await savePendingLogin(pending);
+        if (json) printJson({ verificationUrl: pending.verificationUrl, userCode: pending.userCode, expiresAt: new Date(pending.expiresAt).toISOString(), next: "edena login --wait" });
         else
             process.stdout.write(
-                `Signed in to ${bold(poll.organization.name)} (${poll.organization.environment}) with the key “${poll.key.name}”.\n` +
-                    dim(`Commands now run there. Try: edena students list\n`),
+                `Open this page to sign in, and check that it shows the code ${bold(pending.userCode)}:\n\n  ${pending.verificationUrl}\n\n` +
+                    dim("Then run edena login --wait. The code works for ten minutes.\n"),
             );
         return EXIT.ok;
     }
-    process.stderr.write("The sign-in ran out. Run edena login again.\n");
-    return EXIT.auth;
+
+    process.stderr.write(`\nOpen this page to sign in, and check that it shows the code ${bold(pending.userCode)}:\n\n  ${pending.verificationUrl}\n\n`);
+    if (!hasFlag(args, "noBrowser") && process.stdout.isTTY) openUrl(pending.verificationUrl);
+    return waitForApproval(pending, json);
+}
+
+function post<T>(apiUrl: string, path: string, body: unknown): Promise<T | null> {
+    return apiRequest({ apiUrl, apiKey: null, method: "POST", path, body }).then((response) => (response.kind === "json" ? (response.data as T) : null));
+}
+
+/** Polls until the sign-in is approved, denied or runs out, and keeps the key it receives. */
+async function waitForApproval(pending: PendingLogin, json: boolean): Promise<number> {
+    process.stderr.write(dim("Waiting for you to approve it in the console…\n"));
+    try {
+        while (Date.now() < pending.expiresAt) {
+            await sleep(pending.interval * 1000);
+            let poll: Poll | null;
+            try {
+                poll = await post<Poll>(pending.apiUrl, "/cli/sessions/token", { deviceCode: pending.deviceCode });
+            } catch (error) {
+                if (error instanceof ApiError && error.key === "cli.session_denied") {
+                    process.stderr.write("The sign-in was denied in the console.\n");
+                    return EXIT.auth;
+                }
+                if (error instanceof ApiError && error.key === "cli.session_not_found") break;
+                throw error;
+            }
+            if (!poll || poll.status === "pending") continue;
+            const profile = { apiUrl: pending.apiUrl, organization: poll.organization, key: poll.key };
+            await saveProfile(poll.organization.slug, profile, poll.apiKey);
+            if (json) printJson({ signedIn: true, profile: poll.organization.slug, ...profile });
+            else
+                process.stdout.write(
+                    `Signed in to ${bold(poll.organization.name)} (${poll.organization.environment}) with the key “${poll.key.name}”.\n` +
+                        dim(`Commands now run there. Try: edena students list\n`),
+                );
+            return EXIT.ok;
+        }
+        process.stderr.write("The sign-in ran out. Run edena login again.\n");
+        return EXIT.auth;
+    } finally {
+        await clearPendingLogin();
+    }
 }
 
 /** Revokes the key this terminal holds and forgets it: signing out for good, not just locally. */

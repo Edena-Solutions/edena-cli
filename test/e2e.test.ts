@@ -139,6 +139,26 @@ describe("edena, end to end against a fake API", () => {
         if (process.platform !== "win32") assert.equal((await stat(credentials)).mode & 0o777, 0o600);
     });
 
+    it("signs in in two steps for a coding agent: the link at once, then the wait", async () => {
+        const started = await run(["login", "--start", "--json"]);
+        assert.equal(started.code, 0, started.stderr);
+        const answer = JSON.parse(started.stdout);
+        assert.equal(answer.userCode, "BCDF-GHJK");
+        assert.equal(answer.next, "edena login --wait");
+        assert.equal(answer.deviceCode, undefined);
+        const pending = join(home, "config", "pending-login.json");
+        if (process.platform !== "win32") assert.equal((await stat(pending)).mode & 0o777, 0o600);
+
+        const waited = await run(["login", "--wait", "--json"]);
+        assert.equal(waited.code, 0, waited.stderr);
+        assert.equal(JSON.parse(waited.stdout).profile, "escola-sandbox");
+        await assert.rejects(stat(pending));
+
+        const nothingWaiting = await run(["login", "--wait"]);
+        assert.equal(nothingWaiting.code, 2);
+        assert.match(nothingWaiting.stderr, /login --start/);
+    });
+
     it("runs an operation with the key, answering JSON to another program", async () => {
         const result = await run(["students", "list", "--status", "active"]);
         assert.equal(result.code, 0, result.stderr);

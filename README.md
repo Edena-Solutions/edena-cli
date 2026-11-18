@@ -14,6 +14,8 @@ Requires Node.js 20 or later. No runtime dependencies.
 
 `edena login` prints a link and a code, and opens the browser. In the Edena console, an Admin Developer checks the code and approves it, choosing where the CLI works (the organization's sandbox, recommended, or its real data) and the role of its key. The terminal then receives an API key of its own, named after the machine, which shows up in the console's Keys and can be revoked there.
 
+A coding agent signs in in two steps, since its tools show a command's output only when it ends: `edena login --start` prints the link and the code and returns at once, so the agent can hand them to you, and `edena login --wait` finishes once you approve. The installed skill tells agents to do this.
+
 ```sh
 edena whoami                     # the organization and key in use
 edena profiles                   # every organization this terminal is signed in to

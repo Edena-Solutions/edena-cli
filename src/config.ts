@@ -105,6 +105,33 @@ export async function listenSecret(): Promise<string> {
     return secret;
 }
 
+/** A sign-in started with `edena login --start`, for `edena login --wait` to finish. */
+export interface PendingLogin {
+    apiUrl: string;
+    /** Secret: whoever holds it receives the key once the sign-in is approved. */
+    deviceCode: string;
+    userCode: string;
+    verificationUrl: string;
+    interval: number;
+    /** Unix milliseconds. */
+    expiresAt: number;
+}
+
+const pendingLoginFile = () => join(configDir(), "pending-login.json");
+
+/** Kept like the keys, readable only by their owner: the device code is as good as the key it waits for. */
+export async function savePendingLogin(pending: PendingLogin): Promise<void> {
+    await writeJson(pendingLoginFile(), pending, 0o600);
+}
+
+export async function readPendingLogin(): Promise<PendingLogin | null> {
+    return readJson<PendingLogin | null>(pendingLoginFile(), null);
+}
+
+export async function clearPendingLogin(): Promise<void> {
+    await rm(pendingLoginFile(), { force: true });
+}
+
 /** What a command runs with: the key and where it works. */
 export interface Session {
     apiUrl: string;

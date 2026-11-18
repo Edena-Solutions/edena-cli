@@ -6,6 +6,11 @@
 #
 # A release whose version has a pre-release part (0.2.0-beta.1) goes out under the "next" tag, so
 # `npm install @edena-solutions/cli` keeps installing the latest stable one.
+#
+# This job can publish the package, so nothing in it moves on its own: the actions are pinned to a
+# commit (a tag can be moved to other code), npm to a version (`latest` would run whatever npm
+# publishes next), and there is no dependency cache, which other workflow runs could have written.
+# Update them on purpose: the tag each commit was is in its comment.
 name: Publish to npm
 
 on:
@@ -20,14 +25,15 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
-          cache: npm
-      # Trusted publishing needs npm 11.5.1 or later.
-      - run: npm install -g npm@latest
+      # Trusted publishing needs npm 11.5.1 or later. 12.2.2 published 0.1.0.
+      - run: npm install -g npm@12.2.2
       - run: npm ci
       - run: npm test
       - name: Check the release matches package.json

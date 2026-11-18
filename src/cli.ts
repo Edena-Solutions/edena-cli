@@ -30,6 +30,7 @@ ${bold("Find a command")}
 
 ${bold("Session")}
   edena login                      sign in from the browser (the sandbox, or real data)
+  edena login --start / --wait     the same in two steps, for a coding agent
   edena whoami                     the organization and key in use
   edena profiles / use <profile>   switch organization
   edena logout                     revoke this terminal's key
