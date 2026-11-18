@@ -4,6 +4,7 @@ import { parseArgs } from "../src/args.js";
 import { isWebUrl } from "../src/commands/open.js";
 import { buildRequest } from "../src/commands/operation.js";
 import { printHuman, printJson, sanitizeForTerminal } from "../src/output.js";
+import { HIDDEN, hideSensitive, sensitiveRulesOf, shouldHideSensitive, worksOnRealData } from "../src/redact.js";
 import { Reference } from "../src/reference.js";
 import { categoryPrompt } from "../src/schema.js";
 import { DOCUMENT } from "./fixture.js";
@@ -148,5 +149,49 @@ describe("isWebUrl", () => {
     it("only lets http(s) addresses be opened", () => {
         assert.ok(isWebUrl("https://app.edena.es/escola/developers"));
         for (const url of ["javascript:alert(1)", "file:///etc/passwd", "ms-settings:", "not a url"]) assert.ok(!isWebUrl(url));
+    });
+});
+
+
+describe("hiding sensitive fields from other programs", () => {
+    const live = { apiKey: "edn_live_x", profile: { apiUrl: "", organization: { slug: "escola", name: "Escola", environment: "live" }, key: { id: "k", name: "CLI", prefix: "edn_live_", role: "admin" } } };
+    const sandbox = { ...live, profile: { ...live.profile, organization: { ...live.profile.organization, environment: "sandbox" } } };
+    const noFlags = parseArgs([]);
+
+    it("hides on real data when the output goes to another program, and only then", () => {
+        assert.equal(shouldHideSensitive(live, noFlags, false), true);
+        assert.equal(shouldHideSensitive(live, noFlags, true), false);
+        assert.equal(shouldHideSensitive(sandbox, noFlags, false), false);
+        assert.equal(shouldHideSensitive(live, parseArgs(["--reveal-sensitive"]), false), false);
+    });
+
+    it("tells real data from a sandbox by the key when it comes from EDENA_API_KEY, unknown counting as real", () => {
+        assert.equal(worksOnRealData({ apiKey: "edn_live_x", profile: null }), true);
+        assert.equal(worksOnRealData({ apiKey: "edn_test_x", profile: null }), false);
+        assert.equal(worksOnRealData({ apiKey: "something-else", profile: null }), true);
+    });
+
+    it("applies the API's rules, and never fewer than its own floor", () => {
+        const fromApi = sensitiveRulesOf({ "x-sensitive-keys": ["iban", "favouriteColour"], "x-sensitive-key-patterns": ["^secretnote"] });
+        const answer = { favouriteColour: "blue", secretNoteForTeacher: "x", dni: "1", name: "Ana" };
+        const { value, hidden } = hideSensitive(answer, fromApi);
+        assert.deepEqual(value, { favouriteColour: HIDDEN, secretNoteForTeacher: HIDDEN, dni: HIDDEN, name: "Ana" });
+        assert.equal(hidden, 3);
+    });
+
+    it("keeps hiding with the floor alone when the reference carries no rules, or broken ones", () => {
+        for (const document of [{}, { "x-sensitive-keys": [], "x-sensitive-key-patterns": ["(unclosed"] }]) {
+            const { value } = hideSensitive({ IBAN: "ES91", allergyNotes: "nuts", passportNumber: "X1" }, sensitiveRulesOf(document));
+            assert.deepEqual(value, { IBAN: HIDDEN, allergyNotes: HIDDEN, passportNumber: HIDDEN });
+        }
+    });
+
+    it("hides nested fields and fields inside lists, leaving empty ones as they are", () => {
+        const { value, hidden } = hideSensitive(
+            { data: [{ guardians: [{ dni: "1", iban: "" }, { healthInfo: { notes: "x" } }] }] },
+            sensitiveRulesOf({}),
+        );
+        assert.deepEqual(value, { data: [{ guardians: [{ dni: HIDDEN, iban: "" }, { healthInfo: HIDDEN }] }] });
+        assert.equal(hidden, 2);
     });
 });

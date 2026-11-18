@@ -5,6 +5,8 @@ import { resolveSession } from "../config.js";
 import { EXIT, NotSignedInError, UsageError } from "../errors.js";
 import { apiRequest, type HttpMethod } from "../http.js";
 import { printHuman, printJson, wantsJson } from "../output.js";
+import { hideSensitive, reportHidden, sensitiveRulesOf, shouldHideSensitive } from "../redact.js";
+import { loadReference } from "../reference.js";
 
 const METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
@@ -43,8 +45,16 @@ export async function api(args: ParsedArgs): Promise<number> {
     const body = raw === undefined ? undefined : JSON.parse(raw.startsWith("@") ? await readFile(raw.slice(1), "utf8") : raw);
     const response = await apiRequest({ apiUrl: session.apiUrl, apiKey: session.apiKey, method: method as HttpMethod, path, query, body });
     if (response.kind === "json") {
-        if (wantsJson(hasFlag(args, "json"))) printJson(response.data);
-        else printHuman(response.data);
+        let data = response.data;
+        if (shouldHideSensitive(session, args)) {
+            // The API's rules, from its reference; the floor alone when the reference cannot be read.
+            const document = await loadReference(session.apiUrl).then((reference) => reference.document).catch(() => ({}));
+            const { value, hidden } = hideSensitive(data, sensitiveRulesOf(document));
+            data = value;
+            reportHidden(hidden);
+        }
+        if (wantsJson(hasFlag(args, "json"))) printJson(data);
+        else printHuman(data);
     } else if (response.kind === "file") {
         // A file's bytes on a terminal are read as its commands: it goes to a program or a file only.
         if (process.stdout.isTTY) throw new UsageError(`The answer is a file (${response.contentType}).`, "Redirect it to a file: edena api … > file.");

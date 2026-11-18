@@ -48,6 +48,9 @@ export interface Document {
     tags?: { name: string; description?: string; "x-displayName"?: string }[];
     paths: Record<string, Partial<Record<Lowercase<HttpMethod>, RawOperation>>>;
     components?: { schemas?: Record<string, Schema> };
+    /** The fields the API considers sensitive, lowercase, and patterns for more: see `redact.ts`. */
+    "x-sensitive-keys"?: string[];
+    "x-sensitive-key-patterns"?: string[];
 }
 
 export interface Operation {

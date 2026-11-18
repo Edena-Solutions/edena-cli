@@ -90,6 +90,12 @@ node dist/src/cli.js --help
 
 `EDENA_REFERENCE_FILE=path/to/openapi.json` reads the reference from disk; `EDENA_CONFIG_DIR` and `EDENA_CACHE_DIR` move the config and the cache.
 
+## Sensitive data and AI agents
+
+When the data is real and the output goes to another program (an AI agent, a pipe, a script), the CLI replaces bank details, identity documents, health data and credentials with `"[hidden]"`, at any depth, and says on stderr how many fields it hid. In a sandbox, or at a terminal, nothing is hidden. The fields are the ones Edena's own AI connector hides: the API publishes them in its reference (`x-sensitive-keys`, `x-sensitive-key-patterns`), and the CLI adds a built-in floor in case a reference carries none. A script that needs them passes `--reveal-sensitive`; downloads with `--output` are never changed.
+
+This keeps sensitive data, much of it about minors, from reaching an AI provider by accident. It is not a security boundary: an agent that can run commands on the machine could ask for the fields some other way. Give agents a sandbox key, or a key with only the role they need.
+
 ## Releasing
 
 1. On `main`, `npm version patch` (or `minor`, `major`, `prerelease --preid beta`): bumps `package.json` and tags `vX.Y.Z`.

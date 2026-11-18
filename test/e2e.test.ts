@@ -12,6 +12,14 @@ import { DOCUMENT } from "./fixture.js";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "cli.js");
 const KEY = "edn_test_abc123";
+/** A key on real data, from `EDENA_API_KEY`: what an agent in CI or a script would hold. */
+const LIVE_KEY = "edn_live_abc123";
+
+/** Two pages of students, with what must never reach an agent by accident at several depths. */
+const STUDENTS = [
+    { id: "c1", name: "Ana", iban: "ES9121000418450200051332", guardian: { name: "Bea", dni: "12345678Z" }, healthNotes: "Asthma" },
+    { id: "c2", name: "Carla", iban: null, tags: [{ name: "Comedor", allergies: ["nuts"] }] },
+];
 
 /** The API as the CLI sees it: the reference, the sign-in, and a few operations. */
 function fakeApi() {
@@ -55,9 +63,13 @@ function fakeApi() {
             response.write(": ping\n\nevent: reconnect\ndata: {}\n\n");
             return response.end();
         }
-        if (request.headers.authorization !== `Bearer ${KEY}`) return json(401, { statusCode: 401, key: "auth.api_key_invalid", message: "No key.", requestId: "req-1" });
+        const signedIn = request.headers.authorization === `Bearer ${KEY}` || (route === "GET /clients" && request.headers.authorization === `Bearer ${LIVE_KEY}`);
+        if (!signedIn) return json(401, { statusCode: 401, key: "auth.api_key_invalid", message: "No key.", requestId: "req-1" });
         if (route === "GET /cli/whoami") return json(200, { organization: { slug: "escola-sandbox", environment: "sandbox" }, key: { name: "CLI · test" } });
-        if (route === "GET /clients") return json(200, { data: [{ id: "c1", name: "Ana" }], meta: { total: 1, page: 1, pageSize: 20, pages: 1 } });
+        if (route === "GET /clients") {
+            const page = Number(new URL(request.url ?? "/", "http://fake").searchParams.get("page") ?? "1");
+            return json(200, { data: [STUDENTS[page - 1]], meta: { total: 2, page, pageSize: 1, pages: 2 } });
+        }
         if (route === "POST /clients") return json(201, { id: "c2", ...JSON.parse(body) });
         if (route === "GET /clients/missing") return json(404, { statusCode: 404, key: "client.not_found", message: "Student not found.", requestId: "req-404" });
         if (route === "GET /webhook-events") return json(200, { data: [EVENTS[1]], meta: { total: 1, page: 1, pageSize: 1, pages: 1 } });
@@ -175,6 +187,35 @@ describe("edena, end to end against a fake API", () => {
         assert.equal(result.code, 0, result.stderr);
         assert.equal(JSON.parse(result.stdout).data[0].name, "Ana");
         assert.equal(seen.at(-1)?.url, "/clients?status=active");
+    });
+
+    it("shows a sandbox's data as it is, sensitive fields included", async () => {
+        const result = await run(["students", "list"]);
+        assert.equal(JSON.parse(result.stdout).data[0].iban, STUDENTS[0]!.iban);
+        assert.doesNotMatch(result.stderr, /Hid /);
+    });
+
+    it("hides real data's sensitive fields from another program, at any depth and on every page", async () => {
+        const result = await new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
+            execFile("node", [CLI, "students", "list", "--all"], { env: { ...env, EDENA_API_KEY: LIVE_KEY } }, (error, stdout, stderr) =>
+                resolve({ code: error ? ((error as { code?: number }).code ?? 1) : 0, stdout, stderr }),
+            );
+        });
+        assert.equal(result.code, 0, result.stderr);
+        const [ana, carla] = JSON.parse(result.stdout).data;
+        assert.deepEqual(ana, { id: "c1", name: "Ana", iban: "[hidden]", guardian: { name: "Bea", dni: "[hidden]" }, healthNotes: "[hidden]" });
+        // An empty value says nothing: it stays as it is.
+        assert.deepEqual(carla, { id: "c2", name: "Carla", iban: null, tags: [{ name: "Comedor", allergies: "[hidden]" }] });
+        assert.match(result.stderr, /Hid 4 sensitive fields/);
+    });
+
+    it("shows them to a script that asks with --reveal-sensitive", async () => {
+        const result = await new Promise<{ stdout: string }>((resolve) => {
+            execFile("node", [CLI, "students", "list", "--reveal-sensitive"], { env: { ...env, EDENA_API_KEY: LIVE_KEY } }, (_error, stdout) =>
+                resolve({ stdout }),
+            );
+        });
+        assert.equal(JSON.parse(result.stdout).data[0].guardian.dni, "12345678Z");
     });
 
     it("will not write without --yes when nobody is at the keyboard", async () => {

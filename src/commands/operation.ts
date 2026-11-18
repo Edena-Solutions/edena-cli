@@ -5,11 +5,12 @@ import { resolveSession, type Session } from "../config.js";
 import { EXIT, NotSignedInError, UsageError } from "../errors.js";
 import { apiRequest, type ApiResponse } from "../http.js";
 import { bold, dim, printHuman, printJson, wantsJson } from "../output.js";
+import { type SensitiveRules, hideSensitive, reportHidden, sensitiveRulesOf, shouldHideSensitive } from "../redact.js";
 import type { Group, Operation, Parameter, Reference, Schema } from "../reference.js";
 import { TypeCollector, bodySchemaOf, oneLine, parametersOf, resolve } from "../schema.js";
 
 /** Flags every command takes, which are never an operation's own. */
-const GLOBAL_FLAGS = new Set(["json", "yes", "all", "help", "profile", "data", "output", "idempotencyKey", "apiUrl"]);
+const GLOBAL_FLAGS = new Set(["json", "yes", "all", "help", "profile", "data", "output", "idempotencyKey", "apiUrl", "revealSensitive"]);
 const MAX_PAGES = 200;
 
 /** A flag's text as the value its schema asks for: a number, a boolean, a list, an object. */
@@ -126,7 +127,7 @@ export async function runOperation(reference: Reference, operation: Operation, a
 
     let response = await call();
     if (hasFlag(args, "all") && response.kind === "json") response = await allPages(response, call);
-    return print(response, args);
+    return print(response, args, () => sensitiveRulesOf(reference.document), session);
 }
 
 /** Every page of a paginated list, one after another, as one list. */
@@ -141,7 +142,16 @@ async function allPages(first: Extract<ApiResponse, { kind: "json" }>, call: (pa
     return { ...first, data: { data: rows, meta: { ...page.meta, page: 1, pages: 1, pageSize: rows.length, total: page.meta.total ?? rows.length } } };
 }
 
-async function print(response: ApiResponse, args: ParsedArgs): Promise<number> {
+/**
+ * Prints an answer. A file goes to `--output` or another program as it is; JSON going to another program
+ * on real data has its sensitive fields hidden first (`shouldHideSensitive`).
+ */
+export async function print(
+    response: ApiResponse,
+    args: ParsedArgs,
+    rules: () => SensitiveRules,
+    session: Pick<Session, "profile" | "apiKey">,
+): Promise<number> {
     if (response.kind === "empty") {
         if (!wantsJson(hasFlag(args, "json"))) process.stdout.write(dim("Done.\n"));
         return EXIT.ok;
@@ -158,8 +168,14 @@ async function print(response: ApiResponse, args: ParsedArgs): Promise<number> {
         }
         return EXIT.ok;
     }
-    if (wantsJson(hasFlag(args, "json"))) printJson(response.data);
-    else printHuman(response.data);
+    let data = response.data;
+    if (shouldHideSensitive(session, args)) {
+        const { value, hidden } = hideSensitive(data, rules());
+        data = value;
+        reportHidden(hidden);
+    }
+    if (wantsJson(hasFlag(args, "json"))) printJson(data);
+    else printHuman(data);
     return EXIT.ok;
 }
 

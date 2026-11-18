@@ -5,7 +5,7 @@ export interface ParsedArgs {
 }
 
 /** Flags that never take a value, so `--json students` does not swallow the word after it. */
-const BOOLEAN_FLAGS = new Set(["json", "yes", "all", "help", "refresh", "project", "version", "noBrowser", "printSecret", "mine", "start", "wait"]);
+const BOOLEAN_FLAGS = new Set(["json", "yes", "all", "help", "refresh", "project", "version", "noBrowser", "printSecret", "mine", "start", "wait", "revealSensitive"]);
 const SHORT: Record<string, string> = { y: "yes", h: "help", v: "version" };
 
 /** `--page-size` and `--pageSize` are the same flag: the API names it in camelCase. */

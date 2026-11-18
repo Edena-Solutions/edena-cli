@@ -55,6 +55,8 @@ ${bold("Flags")}
   --yes      run a write without asking (agents need it; ask the person first)
   --all      every page of a list
   --profile  the organization to use (EDENA_PROFILE)
+  --reveal-sensitive  show bank details, identity documents, health and credentials to another
+             program on real data (hidden from agents and pipes by default)
   EDENA_API_KEY and EDENA_API_URL override the session and the API's address.
 `;
 
