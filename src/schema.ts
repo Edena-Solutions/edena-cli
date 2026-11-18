@@ -176,7 +176,7 @@ const RULES = (apiUrl: string) => [
     "Authentication: header `Authorization: Bearer <key>`, with the key in the `EDENA_API_KEY` environment variable. Never put it in code that runs in a browser: a key sent from a web page answers 403 `auth.api_key_in_browser`. When an app acts on behalf of its users, request end-user tokens (`POST /end-user-tokens`) from your server.",
     "Writes (POST, PUT, PATCH, DELETE): send the `Idempotency-Key` header with a UUID per operation and reuse it when retrying; for 24 hours the same key answers what it answered the first time.",
     "Errors: every one answers `ErrorResponse`. Decide on `key`, which is stable, never on `message`, and log `requestId`. A 400 names the fields that failed in `details.fields`.",
-    "Limit: 300 requests per minute per key; past that the API answers 429. Retry with exponential backoff, as for a 5xx.",
+    "Limits per minute: 300 requests per key and 1,200 for all of the organization's keys. Read `X-RateLimit-Remaining`; on a 429, wait the seconds in `Retry-After` and retry (`details.scope` says which limit was reached).",
     "Paginated lists take `page` and `pageSize` and answer `{ data, meta: { total, page, pageSize, pages } }`.",
     "To learn about changes without polling, use webhooks (set up in the developer console) or `GET /webhook-events`.",
 ];
