@@ -1,6 +1,6 @@
 {
   "name": "@edena-solutions/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Edena's command line: every operation of the Edena API as a command, for people and for coding agents.",
   "license": "MIT",
   "homepage": "https://github.com/Edena-Solutions/edena-cli#readme",
