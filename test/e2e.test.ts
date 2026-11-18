@@ -42,7 +42,7 @@ function fakeApi() {
             });
         }
         if (route === "GET /webhook-events/stream" || route === "GET /cli/logs") {
-            if (request.headers.authorization !== `Bearer ${KEY}`) return json(401, { key: "auth.invalid_api_key", message: "No key." });
+            if (request.headers.authorization !== `Bearer ${KEY}`) return json(401, { key: "auth.api_key_invalid", message: "No key." });
             response.writeHead(200, { "Content-Type": "text/event-stream" });
             if (request.headers["last-event-id"]) {
                 resumedFrom.push(String(request.headers["last-event-id"]));
@@ -55,7 +55,7 @@ function fakeApi() {
             response.write(": ping\n\nevent: reconnect\ndata: {}\n\n");
             return response.end();
         }
-        if (request.headers.authorization !== `Bearer ${KEY}`) return json(401, { statusCode: 401, key: "auth.invalid_api_key", message: "No key.", requestId: "req-1" });
+        if (request.headers.authorization !== `Bearer ${KEY}`) return json(401, { statusCode: 401, key: "auth.api_key_invalid", message: "No key.", requestId: "req-1" });
         if (route === "GET /cli/whoami") return json(200, { organization: { slug: "escola-sandbox", environment: "sandbox" }, key: { name: "CLI · test" } });
         if (route === "GET /clients") return json(200, { data: [{ id: "c1", name: "Ana" }], meta: { total: 1, page: 1, pageSize: 20, pages: 1 } });
         if (route === "POST /clients") return json(201, { id: "c2", ...JSON.parse(body) });
@@ -157,6 +157,17 @@ describe("edena, end to end against a fake API", () => {
         const nothingWaiting = await run(["login", "--wait"]);
         assert.equal(nothingWaiting.code, 2);
         assert.match(nothingWaiting.stderr, /login --start/);
+    });
+
+    it("tells to sign in again when its key stopped working (expired or revoked)", async () => {
+        const result = await new Promise<{ code: number; stderr: string }>((resolve) => {
+            execFile("node", [CLI, "students", "list", "--status", "active"], { env: { ...env, EDENA_API_KEY: "edn_test_expired" } }, (error, _stdout, stderr) =>
+                resolve({ code: error ? ((error as { code?: number }).code ?? 1) : 0, stderr }),
+            );
+        });
+        assert.equal(result.code, 3);
+        // Agents read the JSON: the way out is in it too.
+        assert.equal(JSON.parse(result.stderr).error.hint, "Run edena login to sign in again.");
     });
 
     it("runs an operation with the key, answering JSON to another program", async () => {

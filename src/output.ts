@@ -73,12 +73,17 @@ function cell(value: unknown, limit: number): string {
 
 /** An error for whoever reads it: the message, and for the API's errors their key and request id. */
 export function printError(error: unknown, json: boolean): void {
+    // A CLI key expires, or is revoked from the console: signing in again makes another.
+    const hint = error instanceof ApiError && error.key === "auth.api_key_invalid" ? "Run edena login to sign in again." : null;
     if (wantsJson(json) && error instanceof ApiError) {
-        process.stderr.write(`${JSON.stringify({ error: { status: error.status, key: error.key, message: error.message, requestId: error.requestId, details: error.details } })}\n`);
+        process.stderr.write(
+            `${JSON.stringify({ error: { status: error.status, key: error.key, message: error.message, requestId: error.requestId, details: error.details, ...(hint && { hint }) } })}\n`,
+        );
         return;
     }
     if (error instanceof ApiError) {
         process.stderr.write(`${red("Error")} ${error.message} (${error.key}${error.status ? `, ${error.status}` : ""})\n`);
+        if (hint) process.stderr.write(`${hint}\n`);
         if (error.requestId) process.stderr.write(`Request id: ${error.requestId}\n`);
         return;
     }
