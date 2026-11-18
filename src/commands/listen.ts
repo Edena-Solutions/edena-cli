@@ -3,7 +3,7 @@ import { type ParsedArgs, flag, hasFlag } from "../args.js";
 import { listenSecret, readConfig, resolveSession, saveForwardTo, type Session } from "../config.js";
 import { EXIT, NotSignedInError, UsageError } from "../errors.js";
 import { apiRequest } from "../http.js";
-import { bold, dim, red, wantsJson } from "../output.js";
+import { bold, dim, red, sanitizeForTerminal as safe, wantsJson } from "../output.js";
 import { followStream, sinceOf } from "../sse.js";
 
 /** The headers every delivery carries, as the API's webhooks send them. */
@@ -51,11 +51,11 @@ function printDelivery(json: boolean, type: string, eventId: string, result: Awa
     const outcome = !result
         ? ""
         : result.status === null
-          ? red(`→ failed: ${result.error}`)
+          ? red(`→ failed: ${safe(result.error ?? "")}`)
           : result.status < 300
             ? `→ ${result.status} ${dim(`(${result.durationMs} ms)`)}`
             : red(`→ ${result.status} (${result.durationMs} ms)`);
-    process.stdout.write(`${dim(time())}  ${bold(type.padEnd(28))} ${dim(eventId)}  ${outcome}\n`);
+    process.stdout.write(`${dim(time())}  ${bold(safe(type).padEnd(28))} ${dim(safe(eventId))}  ${outcome}\n`);
 }
 
 async function signedIn(args: ParsedArgs): Promise<Session & { apiKey: string }> {

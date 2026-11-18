@@ -14,7 +14,7 @@ import {
 } from "../config.js";
 import { ApiError, EXIT, NotSignedInError, UsageError } from "../errors.js";
 import { apiRequest } from "../http.js";
-import { bold, dim, printHuman, printJson, wantsJson } from "../output.js";
+import { bold, dim, printHuman, printJson, sanitizeForTerminal as safe, wantsJson } from "../output.js";
 import { VERSION } from "../version.js";
 import { openUrl } from "./open.js";
 
@@ -74,13 +74,13 @@ export async function login(args: ParsedArgs): Promise<number> {
         if (json) printJson({ verificationUrl: pending.verificationUrl, userCode: pending.userCode, expiresAt: new Date(pending.expiresAt).toISOString(), next: "edena login --wait" });
         else
             process.stdout.write(
-                `Open this page to sign in, and check that it shows the code ${bold(pending.userCode)}:\n\n  ${pending.verificationUrl}\n\n` +
+                `Open this page to sign in, and check that it shows the code ${bold(safe(pending.userCode))}:\n\n  ${safe(pending.verificationUrl)}\n\n` +
                     dim("Then run edena login --wait. The code works for ten minutes.\n"),
             );
         return EXIT.ok;
     }
 
-    process.stderr.write(`\nOpen this page to sign in, and check that it shows the code ${bold(pending.userCode)}:\n\n  ${pending.verificationUrl}\n\n`);
+    process.stderr.write(`\nOpen this page to sign in, and check that it shows the code ${bold(safe(pending.userCode))}:\n\n  ${safe(pending.verificationUrl)}\n\n`);
     if (!hasFlag(args, "noBrowser") && process.stdout.isTTY) openUrl(pending.verificationUrl);
     return waitForApproval(pending, json);
 }
@@ -112,7 +112,7 @@ async function waitForApproval(pending: PendingLogin, json: boolean): Promise<nu
             if (json) printJson({ signedIn: true, profile: poll.organization.slug, ...profile });
             else
                 process.stdout.write(
-                    `Signed in to ${bold(poll.organization.name)} (${poll.organization.environment}) with the key “${poll.key.name}”.\n` +
+                    `Signed in to ${bold(safe(poll.organization.name))} (${safe(poll.organization.environment)}) with the key “${safe(poll.key.name)}”.\n` +
                         dim(`Commands now run there. Try: edena students list\n`),
                 );
             return EXIT.ok;
@@ -135,7 +135,7 @@ export async function logout(args: ParsedArgs): Promise<number> {
         if (!(error instanceof ApiError && error.status === 401)) throw error;
     }
     await removeProfile(session.profileName);
-    process.stdout.write(`Signed out of ${session.profile?.organization.name ?? session.profileName}; its key is revoked.\n`);
+    process.stdout.write(`Signed out of ${safe(session.profile?.organization.name ?? session.profileName)}; its key is revoked.\n`);
     return EXIT.ok;
 }
 
@@ -163,7 +163,9 @@ export async function profiles(args: ParsedArgs): Promise<number> {
     }));
     if (wantsJson(hasFlag(args, "json"))) printJson(list);
     else if (list.length === 0) process.stdout.write("Not signed in anywhere. Run edena login.\n");
-    else for (const entry of list) process.stdout.write(`${entry.current ? "*" : " "} ${bold(entry.profile)}  ${entry.organization} (${entry.environment})  ${dim(entry.key)}\n`);
+    else
+        for (const entry of list)
+            process.stdout.write(`${entry.current ? "*" : " "} ${bold(safe(entry.profile))}  ${safe(entry.organization)} (${safe(entry.environment)})  ${dim(safe(entry.key))}\n`);
     return EXIT.ok;
 }
 
@@ -176,6 +178,6 @@ export async function use(args: ParsedArgs): Promise<number> {
     }
     await useProfile(name);
     const profile = config.profiles[name];
-    process.stdout.write(`Commands now run in ${profile?.organization.name} (${profile?.organization.environment}).\n`);
+    process.stdout.write(`Commands now run in ${safe(profile?.organization.name ?? name)} (${safe(profile?.organization.environment ?? "")}).\n`);
     return EXIT.ok;
 }

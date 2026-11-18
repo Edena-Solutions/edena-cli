@@ -3,17 +3,35 @@ import { type ParsedArgs, flag } from "../args.js";
 import { resolveSession } from "../config.js";
 import { EXIT, NotSignedInError, UsageError } from "../errors.js";
 import { apiRequest } from "../http.js";
+import { sanitizeForTerminal } from "../output.js";
 import { loadReference } from "../reference.js";
 
 const SECTIONS = ["overview", "keys", "webhooks", "environment", "docs", "requests", "team"];
 
 export function openUrl(url: string): void {
+    // The address comes from the API. Only a web page is opened, and on Windows without `cmd`, whose
+    // parsing would run whatever follows an `&` in it.
+    if (!isWebUrl(url)) return;
     const [command, args] =
-        process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
+        process.platform === "darwin"
+            ? ["open", [url]]
+            : process.platform === "win32"
+              ? ["rundll32", ["url.dll,FileProtocolHandler", url]]
+              : ["xdg-open", [url]];
     try {
         spawn(command, args, { stdio: "ignore", detached: true }).on("error", () => undefined).unref();
     } catch {
         // Nowhere to open it: the printed link is enough.
+    }
+}
+
+/** Whether it is an http(s) address: nothing else is handed to the system to open. */
+export function isWebUrl(url: string): boolean {
+    try {
+        const { protocol } = new URL(url);
+        return protocol === "https:" || protocol === "http:";
+    } catch {
+        return false;
     }
 }
 
@@ -35,7 +53,7 @@ export async function open(args: ParsedArgs): Promise<number> {
         if (!operation) throw new UsageError(`No operation “${rest.join(" ")}”.`);
         url += `?op=${encodeURIComponent(operation.id)}`;
     }
-    process.stdout.write(`${url}\n`);
+    process.stdout.write(`${sanitizeForTerminal(url)}\n`);
     if (process.stdout.isTTY) openUrl(url);
     return EXIT.ok;
 }

@@ -46,6 +46,8 @@ export async function api(args: ParsedArgs): Promise<number> {
         if (wantsJson(hasFlag(args, "json"))) printJson(response.data);
         else printHuman(response.data);
     } else if (response.kind === "file") {
+        // A file's bytes on a terminal are read as its commands: it goes to a program or a file only.
+        if (process.stdout.isTTY) throw new UsageError(`The answer is a file (${response.contentType}).`, "Redirect it to a file: edena api … > file.");
         process.stdout.write(response.data);
     }
     return EXIT.ok;

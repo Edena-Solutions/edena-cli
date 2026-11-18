@@ -2,7 +2,7 @@ import { type ParsedArgs, flag, hasFlag } from "../args.js";
 import { resolveSession } from "../config.js";
 import { EXIT, NotSignedInError } from "../errors.js";
 import { apiRequest } from "../http.js";
-import { bold, dim, red, wantsJson } from "../output.js";
+import { bold, dim, red, sanitizeForTerminal as safe, wantsJson } from "../output.js";
 import { followStream, sinceOf } from "../sse.js";
 
 interface RequestLog {
@@ -50,7 +50,7 @@ export async function logs(args: ParsedArgs): Promise<number> {
             const status = log.statusCode >= 400 ? red(String(log.statusCode)) : String(log.statusCode);
             const at = new Date(log.createdAt).toTimeString().slice(0, 8);
             process.stdout.write(
-                `${dim(at)}  ${bold(log.method.padEnd(6))} ${status}  ${String(log.durationMs).padStart(5)} ms  ${log.route}  ${dim(`${log.apiKey.name} · ${log.requestId}`)}\n`,
+                `${dim(at)}  ${bold(safe(log.method).padEnd(6))} ${status}  ${String(log.durationMs).padStart(5)} ms  ${safe(log.route)}  ${dim(`${safe(log.apiKey.name)} · ${safe(log.requestId)}`)}\n`,
             );
         },
     });
