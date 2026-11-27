@@ -181,8 +181,11 @@ describe("hiding sensitive fields from other programs", () => {
 
     it("keeps hiding with the floor alone when the reference carries no rules, or broken ones", () => {
         for (const document of [{}, { "x-sensitive-keys": [], "x-sensitive-key-patterns": ["(unclosed"] }]) {
-            const { value } = hideSensitive({ IBAN: "ES91", allergyNotes: "nuts", passportNumber: "X1" }, sensitiveRulesOf(document));
-            assert.deepEqual(value, { IBAN: HIDDEN, allergyNotes: HIDDEN, passportNumber: HIDDEN });
+            const { value } = hideSensitive(
+                { IBAN: "ES91", allergyNotes: "nuts", passportNumber: "X1", idNumber: "12345678Z" },
+                sensitiveRulesOf(document),
+            );
+            assert.deepEqual(value, { IBAN: HIDDEN, allergyNotes: HIDDEN, passportNumber: HIDDEN, idNumber: HIDDEN });
         }
     });
 

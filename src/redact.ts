@@ -26,6 +26,7 @@ const FLOOR_KEYS = [
     "passport",
     "passportnumber",
     "documentnumber",
+    "idnumber",
     "identitydocument",
     "socialsecuritynumber",
     "password",
